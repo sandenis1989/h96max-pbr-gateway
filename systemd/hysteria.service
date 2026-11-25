@@ -1,6 +1,7 @@
 [Unit]
 Description=Hysteria 2 Client Service
-After=network.target pbr-rules.service
+After=network.target network-online.target pbr-rules.service
+Wants=network-online.target
 Requires=pbr-rules.service
 
 [Service]

@@ -1,14 +1,14 @@
 [Unit]
 Description=Static address for wlan0 AP interface
-After=network-pre.target
+After=network-pre.target sys-subsystem-net-devices-wlan0.device
+Wants=network-pre.target sys-subsystem-net-devices-wlan0.device
 Before=hostapd.service dnsmasq.service
-Wants=network-pre.target
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/sbin/ip link set wlan0 up
-ExecStart=/sbin/ip addr replace 192.168.12.1/24 dev wlan0
+# The out-of-tree SKWIFI driver may probe late; wait for the netdev to appear.
+ExecStart=/bin/sh -c 'for i in $(seq 1 30); do [ -e /sys/class/net/wlan0 ] && break; sleep 1; done; [ -e /sys/class/net/wlan0 ] || exit 1; /sbin/ip link set wlan0 up; /sbin/ip addr replace 192.168.12.1/24 dev wlan0; /sbin/sysctl -q -w net.ipv4.conf.wlan0.accept_local=1'
 
 [Install]
 WantedBy=multi-user.target

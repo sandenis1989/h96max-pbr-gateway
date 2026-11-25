@@ -16,7 +16,7 @@ TARGET="${TARGET_HOST:-root@192.168.0.102}"
 echo "=== Deploying PBR Gateway to $TARGET ==="
 
 # 1. Enable IP Forwarding on target (persistent via sysctl.d)
-ssh "$TARGET" "printf 'net.ipv4.ip_forward=1\nnet.ipv6.conf.all.forwarding=1\n' > /etc/sysctl.d/99-ipforward.conf && sysctl --system >/dev/null"
+ssh "$TARGET" "printf 'net.ipv4.ip_forward=1\nnet.ipv6.conf.all.forwarding=1\nnet.ipv4.conf.default.accept_local=1\n' > /etc/sysctl.d/99-ipforward.conf && sysctl --system >/dev/null"
 
 # 2. Remote directories creation
 ssh "$TARGET" "mkdir -p /etc/hysteria /etc/dnsmasq.d /etc/nftables /etc/hostapd /etc/NetworkManager/conf.d /etc/systemd/system/dnsmasq.service.d /etc/systemd/system/nftables.service.d /usr/local/bin /var/log/hysteria /var/lib/pbr && \
