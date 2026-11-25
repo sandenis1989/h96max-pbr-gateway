@@ -1,15 +1,21 @@
+# Hysteria 2 client config.
+# NOTE: schema is for the pinned app/v2.14.0 build (separate tcpTProxy/udpTProxy/tcpRedirect modes).
 server: ${HYSTERIA_SERVER}
 auth: ${HYSTERIA_AUTH_SECRET}
 
 tls:
   sni: ${HYSTERIA_SNI}
-  insecure: false
+  insecure: ${HYSTERIA_TLS_INSECURE}
 
-tproxy:
-  listen: :7893
+tcpTProxy:
+  listen: :${HYSTERIA_TPROXY_PORT}
 
-redirect:
-  listen: :7892
+udpTProxy:
+  listen: :${HYSTERIA_TPROXY_PORT}
+  timeout: 300s
+
+tcpRedirect:
+  listen: :${HYSTERIA_REDIRECT_PORT}
 
 fastOpen: true
 

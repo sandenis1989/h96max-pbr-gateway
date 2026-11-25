@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily refresh of RU IP set (PBR bypass)
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=6h
+Persistent=true
+Unit=pbr-ru-list.service
+
+[Install]
+WantedBy=timers.target

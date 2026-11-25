@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh RU IP set for PBR direct-bypass circuit
+After=network-online.target nftables.service
+Wants=network-online.target
+Requires=nftables.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/update-lists.sh
+
+[Install]
+WantedBy=multi-user.target
