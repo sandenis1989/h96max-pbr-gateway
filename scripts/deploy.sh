@@ -19,7 +19,7 @@ echo "=== Deploying PBR Gateway to $TARGET ==="
 ssh "$TARGET" "printf 'net.ipv4.ip_forward=1\nnet.ipv6.conf.all.forwarding=1\n' > /etc/sysctl.d/99-ipforward.conf && sysctl --system >/dev/null"
 
 # 2. Remote directories creation
-ssh "$TARGET" "mkdir -p /etc/hysteria /etc/dnsmasq.d /etc/nftables /etc/hostapd /etc/NetworkManager/conf.d /etc/systemd/system/dnsmasq.service.d /usr/local/bin /var/log/hysteria /var/lib/pbr && \
+ssh "$TARGET" "mkdir -p /etc/hysteria /etc/dnsmasq.d /etc/nftables /etc/hostapd /etc/NetworkManager/conf.d /etc/systemd/system/dnsmasq.service.d /etc/systemd/system/nftables.service.d /usr/local/bin /var/log/hysteria /var/lib/pbr && \
                [ -f /var/lib/pbr/ru_ips.nft ] || echo 'flush set inet pbr_fw ru_ips' > /var/lib/pbr/ru_ips.nft"
 
 # 3. Process hostapd config
@@ -49,11 +49,13 @@ echo "Uploading systemd units & helper scripts..."
 scp "${SCRIPT_DIR}/systemd/"*.service "$TARGET:/etc/systemd/system/"
 scp "${SCRIPT_DIR}/systemd/pbr-ru-list.timer" "$TARGET:/etc/systemd/system/"
 scp "${SCRIPT_DIR}/config/dnsmasq-after-nftables.conf" "$TARGET:/etc/systemd/system/dnsmasq.service.d/10-after-nftables.conf"
+scp "${SCRIPT_DIR}/config/nftables-no-flush.conf" "$TARGET:/etc/systemd/system/nftables.service.d/10-no-flush.conf"
 scp "${SCRIPT_DIR}/scripts/update-lists.sh" "$TARGET:/usr/local/bin/update-lists.sh"
 scp "${SCRIPT_DIR}/scripts/pbr-rules.sh" "$TARGET:/usr/local/bin/pbr-rules.sh"
 scp "${SCRIPT_DIR}/scripts/apply-zapret-config.sh" "$TARGET:/usr/local/bin/apply-zapret-config.sh"
 scp "${SCRIPT_DIR}/scripts/install-hysteria.sh" "$TARGET:/usr/local/bin/install-hysteria.sh"
-ssh "$TARGET" "chmod +x /usr/local/bin/update-lists.sh /usr/local/bin/pbr-rules.sh /usr/local/bin/apply-zapret-config.sh /usr/local/bin/install-hysteria.sh"
+scp "${SCRIPT_DIR}/scripts/install-tailscale.sh" "$TARGET:/usr/local/bin/install-tailscale.sh"
+ssh "$TARGET" "chmod +x /usr/local/bin/update-lists.sh /usr/local/bin/pbr-rules.sh /usr/local/bin/apply-zapret-config.sh /usr/local/bin/install-hysteria.sh /usr/local/bin/install-tailscale.sh"
 
 # 7. Zapret: nfqws only (qnum 200), firewall ruled by our nftables
 echo "Configuring zapret (nfqws only)..."
@@ -74,5 +76,9 @@ ssh "$TARGET" "systemctl daemon-reload && \
                systemctl enable --now pbr-ru-list.timer && \
                /usr/local/bin/update-lists.sh && \
                systemctl restart dnsmasq.service"
+
+# 10. Tailscale (install + enable; auth is manual or via TAILSCALE_AUTHKEY)
+echo "Configuring Tailscale..."
+ssh "$TARGET" "/usr/local/bin/install-tailscale.sh"
 
 echo "=== Deployment complete ==="
