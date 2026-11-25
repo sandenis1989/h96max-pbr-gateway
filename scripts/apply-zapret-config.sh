@@ -1,0 +1,22 @@
+#!/bin/bash
+set -euo pipefail
+
+# Runs ON the target host. Makes stock /opt/zapret run nfqws only (qnum 200)
+# and leaves all firewall/PBR rules to our nftables config.
+
+CONF=/opt/zapret/config
+BACKUP_DIR=/root/pbr-backup
+BACKUP="$BACKUP_DIR/zapret-config.bak"
+
+[ -f "$CONF" ] || { echo "ERROR: $CONF not found"; exit 1; }
+
+mkdir -p "$BACKUP_DIR"
+[ -f "$BACKUP" ] || cp -a "$CONF" "$BACKUP"
+
+sed -i -E 's/^INIT_APPLY_FW=.*/INIT_APPLY_FW=0/' "$CONF"
+grep -q '^INIT_APPLY_FW=' "$CONF" || echo 'INIT_APPLY_FW=0' >> "$CONF"
+grep -q '^IFACE_LAN=' "$CONF" || echo 'IFACE_LAN=wlan0' >> "$CONF"
+grep -q '^QNUM=' "$CONF" || echo 'QNUM=200' >> "$CONF"
+
+echo "zapret config patched:"
+grep -E '^(INIT_APPLY_FW|IFACE_LAN|IFACE_WAN|QNUM|NFQWS_ENABLE|MODE_FILTER|FWTYPE)=' "$CONF"

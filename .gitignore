@@ -1,0 +1,8 @@
+.env
+*.log
+*.tmp
+
+# rendered from templates by scripts/deploy.sh (contain secrets)
+config/hostapd.conf
+config/hysteria.yaml
+

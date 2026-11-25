@@ -1,0 +1,18 @@
+server: ${HYSTERIA_SERVER}
+auth: ${HYSTERIA_AUTH_SECRET}
+
+tls:
+  sni: ${HYSTERIA_SNI}
+  insecure: false
+
+tproxy:
+  listen: :7893
+
+redirect:
+  listen: :7892
+
+fastOpen: true
+
+bandwidth:
+  up: 100 mbps
+  down: 300 mbps

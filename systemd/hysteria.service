@@ -1,0 +1,14 @@
+[Unit]
+Description=Hysteria 2 Client Service
+After=network.target pbr-rules.service
+Requires=pbr-rules.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/hysteria client -c /etc/hysteria/config.yaml
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
