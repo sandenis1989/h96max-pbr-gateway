@@ -65,6 +65,8 @@ else
 fi
 echo -n "youtube_http="
 ip netns exec "$NS" curl -s -o /dev/null -w '%{http_code}\n' --max-time 20 --resolve "www.youtube.com:443:$YT_IP" https://www.youtube.com/ || echo FAIL
+echo -n "youtube_quic="
+ip netns exec "$NS" curl -sS --http3-only -o /dev/null -w '%{http_code}\n' --max-time 20 --resolve "www.youtube.com:443:$YT_IP" https://www.youtube.com/ || echo FAIL
 
 echo
 echo "== circuit 1: RU direct (ya.ru, resolved via dnsmasq) =="

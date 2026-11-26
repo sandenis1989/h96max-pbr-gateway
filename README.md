@@ -23,10 +23,10 @@ systemd-юниты, скрипты установки/обновления и se
                       │                                                                                  │
                       │   lo / IPv6 / RFC1918 / 100.64/10 / multicast / 255.255.255.255 ──► accept       │
                       │                                                                                  │
-                      │   ┌── daddr ∈ ru_ips ──────────────────────► КОНТУР 1: accept (напрямую)       │
-                      │   │                                                                              │
                       │   ├── daddr ∈ zapret_domains, tcp 80/443, udp 443 ► queue 200 (nfqws)          │
                       │   │                                        КОНТУР 2: desync, затем напрямую     │
+                      │   │                                                                              │
+                      │   ├── daddr ∈ ru_ips ──────────────────────► КОНТУР 1: accept (напрямую)       │
                       │   │                                                                              │
                       │   └── всё остальное (tcp/udp) ──► meta mark 0x1                                │
                       │                                        │                                        │
@@ -48,9 +48,14 @@ systemd-юниты, скрипты установки/обновления и se
 
 | # | Что матчится | Действие | Куда уходит |
 |---|--------------|----------|-------------|
-| 1 | `ip daddr @ru_ips` | `accept` (без mark) | напрямую через `eth0`, без VPN и desync |
 | 2 | `ip daddr @zapret_domains`, tcp 80/443 или udp 443 | `queue num 200 bypass` | `nfqws` десинхронизирует DPI, пакет идёт напрямую |
+| 1 | `ip daddr @ru_ips` | `accept` (без mark) | напрямую через `eth0`, без VPN и desync |
 | 3 | всё остальное (IPv4 tcp/udp) | `meta mark set 0x1` → TPROXY `:7893` | Hysteria 2 → VPS Oslo |
+
+Порядок важен: контур 2 проверяется **до** контура 1. YouTube CDN (GGC)
+отвечает российскими IP, которые попадают и в `ru_ips`; при старом порядке
+видео обходило `nfqws` и резалось DPI. `queue` — терминальное действие,
+поэтому совпавший пакет до `ru_ips` уже не доходит.
 
 Особенности:
 
@@ -63,6 +68,11 @@ systemd-юниты, скрипты установки/обновления и se
   `/var/lib/pbr/ru_ips.nft`, который подключается через `include`.
 - **`zapret_domains`** — набор IPv4, который наполняет `dnsmasq` через
   `nftset=` при резолве доменов из `config/zapret-domains.conf`.
+- **QUIC (UDP/443) тоже десинхронизируется.** `apply-zapret-config.sh`
+  добавляет в `NFQWS_OPT` профиль
+  `--filter-udp=443 --dpi-desync=fake --dpi-desync-fake-quic=…`. Без него у
+  `nfqws` нет UDP-фильтра и QUIC Initial уходит к DPI как есть: превью
+  YouTube (TCP/443) грузятся, а видео (QUIC) молча дропается и буферизуется.
 - **TPROXY** работает в `inet`-таблице, но `tproxy`-стейтменты без указания
   семейства: `meta nfproto ipv4 … tproxy` в `inet` падает с
   `conflicting protocols specified: ip vs. unknown`.
@@ -268,6 +278,12 @@ journalctl -u hostapd -u dnsmasq -u hysteria -b
 # проверка контуров
 dig +short @192.168.12.1 example.com
 curl -s https://api.ipify.org            # напрямую = IP провайдера
+
+# QUIC/DPI: на хосте (в обход nft) youtube по TCP режется, QUIC таймаутится
+curl -sS -o /dev/null -w '%{http_code}\n' --max-time 5 https://www.youtube.com/
+curl -sS --http3-only -o /dev/null -w '%{http_code}\n' --max-time 5 https://www.youtube.com/
+# профили nfqws: должен быть --filter-udp=443 с --dpi-desync-fake-quic
+ps aux | grep '[n]fqws'
 ```
 
 ### Известные грабли (уже учтены)
@@ -290,6 +306,32 @@ curl -s https://api.ipify.org            # напрямую = IP провайд�
   drop-in убирает `flush` из stock-юнита.
 - **Tailscale exit node трафик** приходит с `tailscale0`; интерфейс включён в
   `lan_ifaces`, иначе трафик шёл бы напрямую (YouTube резался бы DPI).
+- **YouTube: превью грузятся, видео буферизуется.** Превью/API идут по TCP/443
+  и десинхронизируются, а видео — по QUIC (UDP/443). Пока у `nfqws` не было
+  UDP-профиля, QUIC уходил к DPI без изменений и молча дропался (проверено:
+  прямой `curl --http3-only https://www.youtube.com/` таймаутит, с
+  `--filter-udp=443 --dpi-desync=fake` — 200 за ~0.8 с). Плюс правило zapret
+  теперь стоит выше `ru_ips`: иначе GGC-IP из российских диапазонов обходили
+  `nfqws`.
+- **MTU/MSS здесь не виноваты (проверено).** `eth0`/`wlan0` — MTU 1500,
+  `tailscale0` — 1280, MSS-clamping в правилах отсутствует. TCP в туннеле
+  терминируется локально в Hysteria, поэтому MSS считается по `wlan0` (1500) и
+  clamping не нужен; скачивание 5 МБ через туннель шло ~6 МБ/с, страница
+  YouTube через zapret — ~1.6 МБ/с. Для будущих Tailscale-клиентов с MTU 1280
+  при желании можно добавить `tcp option maxseg size set rt mtu` для
+  `oifname "tailscale0"`.
+- **GGC-узлы Ростелекома для видео.** Все резолверы (включая DoH) отдают
+  `*.googlevideo.com` → `178.66.83.172–176` (GGC). Порт 80 на них отвечает
+  (`404` за 0.09 с), а TLS с SNI `googlevideo` режется; desync не помогает —
+  похоже, режется по IP. При этом глобальные Google-IP с тем же SNI через
+  zapret/туннель работают (`404` за 0.33 с). QUIC на GGC после фикса отвечает
+  (4/5 быстро, 1/5 с задержкой). Если видео по TCP всё ещё тормозит — это
+  отдельная проблема GGC; лечится переопределением DNS для `googlevideo.com`
+  на глобальный Google-IP или DoH через туннель.
+- **После `systemctl restart nftables` нужен `systemctl restart dnsmasq`.**
+  Таблица пересоздаётся, и dnsmasq теряет handle на `zapret_domains`: до
+  перезапуска `nftset=` молча не наполняется (в `deploy.sh` порядок уже такой,
+  но при ручных перезапусках это легко забыть).
 
 ---
 
