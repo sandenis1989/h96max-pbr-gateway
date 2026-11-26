@@ -22,6 +22,8 @@ grep -q '^QNUM=' "$CONF" || echo 'QNUM=200' >> "$CONF"
 # from YouTube video hosts reach the ISP DPI untouched and are silently
 # dropped: thumbnails (TCP/443, desynced) load fine while video buffers.
 # The fake Initial is consumed by DPI first, the real one then passes.
+# Using --dpi-desync-ttl=6 prevents fake packets from reaching remote GGC
+# servers (avoiding 8-second QUIC handshake retries).
 if ! grep -q 'pbr-gateway: quic desync' "$CONF"; then
     cat >> "$CONF" <<'EOF'
 
@@ -29,7 +31,7 @@ if ! grep -q 'pbr-gateway: quic desync' "$CONF"; then
 # Appended by apply-zapret-config.sh; idempotent.
 case "$NFQWS_OPT" in
     *--filter-udp=443*) ;;
-    *) NFQWS_OPT="$NFQWS_OPT --new --filter-udp=443 --dpi-desync=fake --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin" ;;
+    *) NFQWS_OPT="$NFQWS_OPT --new --filter-udp=443 --dpi-desync=fake --dpi-desync-fake-quic=/opt/zapret/files/fake/quic_initial_www_google_com.bin --dpi-desync-ttl=6" ;;
 esac
 # <<< pbr-gateway: quic desync <<<
 EOF
